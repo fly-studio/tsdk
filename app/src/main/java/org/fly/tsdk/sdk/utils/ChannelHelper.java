@@ -31,7 +31,7 @@ public class ChannelHelper {
 
 
         try (final ApkParser apkParser = new ApkParser(new File(apkPath))) {
-
+            apkParser.open();
             //Comment first
             String comment = byteBufferToString(apkParser.getComment());
 

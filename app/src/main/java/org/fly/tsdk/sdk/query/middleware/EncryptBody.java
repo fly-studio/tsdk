@@ -2,6 +2,8 @@ package org.fly.tsdk.sdk.query.middleware;
 
 import android.util.Log;
 
+import org.apache.commons.lang3.StringUtils;
+import org.fly.core.io.network.result.EncryptedResult;
 import org.fly.core.io.network.result.Result;
 import org.fly.core.text.encrytor.Decryptor;
 import org.fly.tsdk.sdk.query.Request;
@@ -12,7 +14,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.LinkedList;
 
 import okhttp3.MediaType;
 import okhttp3.RequestBody;
@@ -37,7 +39,7 @@ public class EncryptBody implements Middleware {
     }
 
     @Override
-    public void before(Request request, List<Object> object) throws Throwable {
+    public void before(Request request, LinkedList<Object> object) throws Throwable {
         if (null != decryptor)
         {
             //Rewrite body
@@ -51,7 +53,7 @@ public class EncryptBody implements Middleware {
                     body.writeTo(sink);
                     sink.flush();
                     sink.close();
-                    Result result = decryptor.encodeData(data.toString(StandardCharsets.UTF_8.toString()));
+                    EncryptedResult result = decryptor.encodeData(data.toString(StandardCharsets.UTF_8.toString()));
 
                     request.setBody(RequestBody.create(MediaType.get("application/json; charset=utf-8"), result.toJson()));
                 } catch (IOException e) {
@@ -75,15 +77,15 @@ public class EncryptBody implements Middleware {
     }
 
     @Override
-    public void after(Response response, List<Object> object) throws Throwable {
+    public void after(Response response, LinkedList<Object> object) throws Throwable {
 
-        Object obj = object.get(object.size() - 1);
+        Object obj = !object.isEmpty() ? object.getLast() : null;
 
         Result result = obj instanceof Result ? (Result) obj : null;
         // decode result
         if (result != null && null != decryptor) {
 
-            if (result.encrypted != null && !result.encrypted.isEmpty())
+            if (!StringUtils.isEmpty(result.encrypted))
             {
                 result.data = decryptor.decodeData(result);
                 result.encrypted = null;

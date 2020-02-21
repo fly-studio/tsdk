@@ -1,13 +1,20 @@
 package org.fly.tsdk.sdk.query;
 
-import org.fly.core.io.network.result.Result;
+import org.fly.tsdk.sdk.query.exceptions.ResponseException;
 
 import java.io.File;
-import java.util.List;
+import java.util.LinkedList;
 
 public interface QueryListener {
-    void onDownloaded(File file, List<Object> objects);
-    void onDone(Response response, List<Object> objects);
-    void onError(Throwable e, List<Object> objects);
-    void onProgress(long read, long total);
+    default void onDownloaded(File file, LinkedList<Object> objects){
+
+    }
+
+    void onDone(Response response, LinkedList<Object> objects);
+    default void onError(ResponseException e, LinkedList<Object> objects){
+
+    }
+    default void onProgress(long read, long total) {
+
+    }
 }

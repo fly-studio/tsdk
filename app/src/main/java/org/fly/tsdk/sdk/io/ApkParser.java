@@ -65,7 +65,7 @@ public final class ApkParser implements Closeable {
 
     public void open() throws IOException
     {
-        if (null != randomAccessFile)
+        if (null == randomAccessFile)
         {
             randomAccessFile = new RandomAccessFile(apkFile, "r");
             fileChannel = randomAccessFile.getChannel();

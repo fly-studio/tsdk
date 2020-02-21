@@ -4,7 +4,7 @@ import org.fly.core.annotation.NotProguard;
 import org.fly.core.text.json.Jsonable;
 
 @NotProguard
-public class Device extends Jsonable {
+final public class Device extends Jsonable {
     public String imei = null;
     public String idfa = null;
     public String oaid = null;

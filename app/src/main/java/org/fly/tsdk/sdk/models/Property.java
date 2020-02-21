@@ -4,7 +4,7 @@ import org.fly.core.annotation.NotProguard;
 import org.fly.core.text.json.Jsonable;
 
 @NotProguard
-public class Property extends Jsonable {
+final public class Property extends Jsonable {
     public String carrier = null;
     public String connection = null;
     public long app_version_code = 0;

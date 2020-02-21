@@ -1,20 +1,16 @@
 package org.fly.tsdk.sdk.query;
 
 import android.os.AsyncTask;
-import android.util.Log;
 
 import org.apache.commons.lang3.StringUtils;
+import org.fly.tsdk.sdk.query.exceptions.ResponseException;
 import org.fly.tsdk.sdk.query.middleware.Middleware;
 import org.fly.tsdk.sdk.structs.AsyncTaskResult;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.UnsupportedEncodingException;
-import java.net.ConnectException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -35,7 +31,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
     private List<Middleware> middlewareList = new ArrayList<>();
     private QueryListener queryListener;
     private File file;
-    final private List<Object> middlewareObjects  = new ArrayList<>();
+    final private LinkedList<Object> middlewareObjects  = new LinkedList<>();
 
     private QueryTask() {
 
@@ -74,14 +70,14 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
         if (queryListener == null)
             return;
 
-
         if (isCancelled())
         {
-            queryListener.onError(new ConnectException("Request be cancelled"), middlewareObjects);
+            queryListener.onError(new ResponseException("Request be cancelled", 400), middlewareObjects);
 
         } else if (asyncTaskResult.getError() != null)
         {
-            queryListener.onError(asyncTaskResult.getError(), middlewareObjects);
+            Throwable e = asyncTaskResult.getError();
+            queryListener.onError(e instanceof ResponseException ? (ResponseException) e : new ResponseException(e.getMessage(), 500, e) , middlewareObjects);
 
         } else {
             queryListener.onDone(asyncTaskResult.getResult(), middlewareObjects);
@@ -89,7 +85,6 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
             if (file != null)
                 queryListener.onDownloaded(file, middlewareObjects);
         }
-
     }
 
     @Override
@@ -113,10 +108,14 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
             Response response = call(request);
 
-            Collections.reverse(middlewareList);
-
             for (Middleware middleware: middlewareList) {
                 middleware.after(response, middlewareObjects);
+            }
+
+            // server error
+            if (response.getCode() != 200)
+            {
+                throw new ResponseException(response.getStatus() + ": " + response.getContent(), response.getCode());
             }
 
             return new AsyncTaskResult<>(response);
@@ -168,7 +167,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
             publishProgress(totalRead, contentLength);
 
-            if (contentLength > 0) {
+            if (contentLength > 0 || contentLength == -1) {
                 BufferedSource source = body.source();
                 BufferedSink bufferedSink = Okio.buffer(sink);
 
@@ -191,7 +190,6 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
         }
 
-
         for (Map.Entry<String, List<String>> entry: httpResponse.headers().toMultimap().entrySet()
         ) {
             builder.header(entry.getKey(), StringUtils.joinWith(";", entry.getValue()));
@@ -199,6 +197,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
         if (body != null)
             body.close();
+
         httpResponse.close();
 
         return builder.build();
@@ -225,11 +224,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
         for (Map.Entry<String, String> entry: request.getHeaders().entrySet()
         ) {
-            try {
-                builder.header(entry.getKey(), URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8.displayName()));
-            } catch (UnsupportedEncodingException e) {
-                Log.e(TAG, e.getMessage(), e);
-            }
+            builder.header(entry.getKey(), entry.getValue());
         }
 
         builder.method(request.getMethod(), request.getBody());

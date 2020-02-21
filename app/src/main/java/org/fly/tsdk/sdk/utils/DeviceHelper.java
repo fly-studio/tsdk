@@ -2,7 +2,6 @@ package org.fly.tsdk.sdk.utils;
 
 import android.Manifest;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -10,7 +9,6 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.net.Uri;
 import android.os.Build;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
@@ -18,12 +16,8 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.WindowManager;
 
-import androidx.annotation.RequiresPermission;
-
 import org.apache.commons.lang3.time.DateFormatUtils;
 
-import java.io.DataOutputStream;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -66,58 +60,6 @@ public class DeviceHelper {
         }
 
         return null;
-    }
-
-    public static boolean isRoot() {
-        Process process = null;
-        DataOutputStream os = null;
-        try {
-            process = Runtime.getRuntime().exec("su");
-            os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes("exit\n");
-            os.flush();
-            int exitValue = process.waitFor();
-            if (exitValue == 0) {
-                return true;
-            } else {
-                return false;
-            }
-        } catch (Exception e) {
-            Log.d(TAG, e.getMessage(), e);
-            return false;
-        } finally {
-            try {
-                if (os != null) {
-                    os.close();
-                }
-                process.destroy();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    public static boolean isSimulator(Context context)
-    {
-        String url = "tel:" + "123456";
-        Intent intent = new Intent();
-        intent.setData(Uri.parse(url));
-        intent.setAction(Intent.ACTION_DIAL);
-        // 是否可以处理跳转到拨号的 Intent
-        boolean canCallPhone = intent.resolveActivity(context.getPackageManager()) != null;
-        return Build.FINGERPRINT.startsWith("generic")
-                || Build.FINGERPRINT.toLowerCase().contains("vbox")
-                || Build.FINGERPRINT.toLowerCase().contains("test-keys")
-                || Build.MODEL.contains("google_sdk")
-                || Build.MODEL.contains("Emulator")
-                || Build.MODEL.contains("MuMu")
-                || Build.MODEL.contains("virtual")
-                || Build.SERIAL.equalsIgnoreCase("android")
-                || Build.MANUFACTURER.contains("Genymotion")
-                || (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
-                || "google_sdk".equals(Build.PRODUCT)
-                || ((TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE)).getNetworkOperatorName().toLowerCase().equals("android")
-                || !canCallPhone;
     }
 
     //获取当前版本号
@@ -201,7 +143,7 @@ public class DeviceHelper {
 
     public static Location getLastKnownLocation(Context context) {
 
-        if (!hasPermission(context, Manifest.permission_group.PHONE)) {
+        if (!hasPermission(context, Manifest.permission_group.LOCATION)) {
             return null;
         }
 
@@ -325,6 +267,6 @@ public class DeviceHelper {
     }
 
     public static boolean hasPermission(Context mContexts, String permission) {
-        return Build.VERSION.SDK_INT < 23 || mContexts.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED;
+        return Build.VERSION.SDK_INT < 23 || mContexts.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
     }
 }
