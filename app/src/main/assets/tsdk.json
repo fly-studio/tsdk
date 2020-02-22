@@ -4,5 +4,6 @@
   "sdk_params": {
     "appid": "234"
   },
+  "channel": "times",
   "sdk_url": "http://192.168.8.115/projects/tsdk"
 }

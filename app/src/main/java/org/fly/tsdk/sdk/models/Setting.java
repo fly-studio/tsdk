@@ -20,7 +20,6 @@ final public class Setting extends Jsonable {
     protected String app_key = null;
     @JsonIgnore
     protected String sub_channel = null;
-    @JsonIgnore
     protected String channel = null;
     protected Map<String, String> sdk_params = new HashMap<>();
     protected String sdk_url = null;
@@ -53,8 +52,4 @@ final public class Setting extends Jsonable {
         sub_channel = ChannelHelper.getSubChannel(context);
     }
 
-    @JsonIgnore
-    public void setChannel(String channel) {
-        this.channel = channel;
-    }
 }

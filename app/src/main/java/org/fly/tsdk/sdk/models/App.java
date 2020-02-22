@@ -1,6 +1,7 @@
 package org.fly.tsdk.sdk.models;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import org.fly.core.annotation.NotProguard;
 import org.fly.core.text.json.Jsonable;
@@ -13,6 +14,7 @@ final public class App {
         public long app_id = 0;
         public String uuid = null;
         public String sub_channel = null;
+        public String channel = null;
     }
 
     @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.PROTECTED_AND_PUBLIC)
@@ -42,6 +44,16 @@ final public class App {
         public String getPublicKey() {
             return public_key;
         }
+    }
+
+    final public static class Start extends Jsonable {
+        public Device device;
+        public Property property = null;
+    }
+
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.PROTECTED_AND_PUBLIC)
+    final public static class StartResult extends ReportResult {
+        protected boolean need_device_id;
     }
 
     final public static class Exception extends Jsonable {

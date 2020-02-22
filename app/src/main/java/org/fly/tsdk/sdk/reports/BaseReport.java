@@ -4,6 +4,9 @@ import android.content.Context;
 import android.location.Location;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Log;
+
+import androidx.annotation.Nullable;
 
 import com.lahm.library.EasyProtectorLib;
 
@@ -12,7 +15,6 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.fly.core.io.network.result.Result;
 import org.fly.core.text.json.Jsonable;
 import org.fly.tsdk.sdk.TsdkApi;
-import org.fly.tsdk.sdk.imp.SdkApi;
 import org.fly.tsdk.sdk.models.Device;
 import org.fly.tsdk.sdk.models.Property;
 import org.fly.tsdk.sdk.models.ReportResult;
@@ -26,6 +28,7 @@ import org.fly.tsdk.sdk.text.Validator;
 import org.fly.tsdk.sdk.utils.DeviceHelper;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -34,9 +37,11 @@ import okhttp3.HttpUrl;
 
 public class BaseReport {
 
-    private SdkApi sdkApi;
+    private static final String TAG = "BaseReport";
 
-    public BaseReport(SdkApi sdkApi)
+    private TsdkApi sdkApi;
+
+    public BaseReport(TsdkApi sdkApi)
     {
         this.sdkApi = sdkApi;
     }
@@ -102,13 +107,17 @@ public class BaseReport {
     {
         String url = getSetting().getSdkUrl() + urlPath;
 
-        if (pathParameters != null)
-        {
-            for (Map.Entry<String, String> entry: pathParameters.entrySet())
-            {
-                url = url.replace("{" + entry.getKey() + "}", entry.getValue());
-            }
+        if (pathParameters == null) {
+            pathParameters = new HashMap<>();
+            pathParameters.put("alid", getAlid());
+            pathParameters.put("channel", getSetting().getChannel());
         }
+
+        for (Map.Entry<String, String> entry: pathParameters.entrySet())
+        {
+            url = url.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
+        }
+
 
         validateUrl(url);
 
@@ -150,21 +159,24 @@ public class BaseReport {
                     return;
                 }
 
-                if (reportResult != null)
+                if (reportResult != null && reportListener != null)
                     reportListener.callback(reportResult, null);
                 else // response，result.data为空
-                    this.onError(new InvalidJsonException("Response or result.data is empty.", 500), objects);
+                    this.onError(new InvalidJsonException("Response or result.data is invalid: " + response.getContent(), 500), objects);
             }
 
             @Override
             public void onError(ResponseException e, LinkedList<Object> objects) {
-                reportListener.callback(null, e);
+                if (reportListener != null)
+                    reportListener.callback(null, e);
+                else if (e != null) // 如果没有回调，则打印出错误
+                    Log.e(TAG, "Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
             }
 
         };
     }
 
-    protected <T extends ReportResult> void post(HttpUrl url, Jsonable data, Class<T> resultClazz, ReportListener<T> reportListener)
+    protected <T extends ReportResult> void post(HttpUrl url, Jsonable data, Class<T> resultClazz, @Nullable ReportListener<T> reportListener)
     {
         getQuery().postWithEncrypted(url, data, queryToReportListener(resultClazz, reportListener));
     }

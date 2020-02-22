@@ -1,8 +1,9 @@
 package org.fly.tsdk.sdk.reports;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
-import org.fly.tsdk.sdk.imp.SdkApi;
+import org.fly.tsdk.sdk.TsdkApi;
 import org.fly.tsdk.sdk.models.App;
 import org.fly.tsdk.sdk.utils.Constants;
 import org.fly.tsdk.sdk.utils.DeviceHelper;
@@ -10,7 +11,7 @@ import org.fly.tsdk.sdk.utils.DeviceHelper;
 public class AppReport extends BaseReport {
     private static final String TAG = "AppReport";
 
-    public AppReport(SdkApi sdkApi) {
+    public AppReport(TsdkApi sdkApi) {
         super(sdkApi);
     }
 
@@ -21,9 +22,18 @@ public class AppReport extends BaseReport {
         appLaunch.property = getProperty();
         appLaunch.app_id = getSetting().getAppId();
         appLaunch.uuid = DeviceHelper.getUUID(getContext());
+        appLaunch.channel = getSetting().getChannel();
         appLaunch.sub_channel = getSetting().getSubChannel();
 
         post(buildUrl(Constants.LAUNCH_URL), appLaunch, App.LaunchResult.class, reportListener);
 
+    }
+
+    public void start(@Nullable final ReportListener<App.StartResult> reportListener) {
+        App.Start appStart = new App.Start();
+        appStart.device = getDevice();
+        appStart.property = getProperty();
+
+        post(buildUrl(Constants.START_URL), appStart, App.StartResult.class, reportListener);
     }
 }
