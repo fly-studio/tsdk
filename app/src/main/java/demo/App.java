@@ -1,14 +1,11 @@
 package demo;
 
-import android.app.Application;
+import org.fly.tsdk.sdk.wrapper.TsdkApplication;
 
-import org.fly.tsdk.sdk.TsdkApi;
-
-public class App extends Application {
+public class App extends TsdkApplication {
     @Override
     public void onCreate() {
         super.onCreate();
 
-        TsdkApi.getInstance().init(this);
     }
 }

@@ -19,13 +19,13 @@ import org.fly.tsdk.sdk.models.Device;
 import org.fly.tsdk.sdk.models.Property;
 import org.fly.tsdk.sdk.models.ReportResult;
 import org.fly.tsdk.sdk.models.Setting;
-import org.fly.tsdk.sdk.query.Query;
-import org.fly.tsdk.sdk.query.QueryListener;
-import org.fly.tsdk.sdk.query.Response;
-import org.fly.tsdk.sdk.query.exceptions.InvalidJsonException;
-import org.fly.tsdk.sdk.query.exceptions.ResponseException;
-import org.fly.tsdk.sdk.text.Validator;
-import org.fly.tsdk.sdk.utils.DeviceHelper;
+import org.fly.tsdk.query.Query;
+import org.fly.tsdk.query.QueryListener;
+import org.fly.tsdk.query.Response;
+import org.fly.tsdk.query.exceptions.InvalidJsonException;
+import org.fly.tsdk.query.exceptions.ResponseException;
+import org.fly.tsdk.text.Validator;
+import org.fly.tsdk.io.DeviceHelper;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -155,14 +155,19 @@ public class BaseReport {
                         }
                     }
                 } catch (IOException e) {
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] JSON: " + e.getMessage(), 500, e), objects);
+                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] JSON: " + e.getMessage(), 5001, e), objects);
                     return;
                 }
 
                 if (reportResult != null && reportListener != null)
                     reportListener.callback(reportResult, null);
-                else // response，result.data为空
-                    this.onError(new InvalidJsonException("Response or result.data is invalid: " + response.getContent(), 500), objects);
+                else if (objects.getLast() == null || !(objects.getLast() instanceof Result)) // response，result.data为空
+                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response or result.data: " + response.getContent(), 5002), objects);
+                else if (reportListener == null)
+                    Log.d(TAG, "Recv [" + resultClazz.getSimpleName() + "]: " + ((Result) objects.getLast()).toJson());
+                else
+                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response or result.data: " + ((Result) objects.getLast()).toJson(), 5003), objects);
+
             }
 
             @Override
@@ -170,7 +175,7 @@ public class BaseReport {
                 if (reportListener != null)
                     reportListener.callback(null, e);
                 else if (e != null) // 如果没有回调，则打印出错误
-                    Log.e(TAG, "Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
+                    Log.e(TAG, "[" + resultClazz.getSimpleName() + "] Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
             }
 
         };

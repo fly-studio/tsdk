@@ -5,9 +5,9 @@ import android.util.Log;
 
 import org.apache.commons.lang3.StringUtils;
 import org.fly.core.text.json.Jsonable;
-import org.fly.tsdk.sdk.exceptions.SignatureNotFoundException;
-import org.fly.tsdk.sdk.io.ApkParser;
-import org.fly.tsdk.sdk.io.StorageHelper;
+import org.fly.tsdk.exceptions.SignatureNotFoundException;
+import org.fly.tsdk.io.ApkParser;
+import org.fly.tsdk.io.StorageHelper;
 
 import java.io.File;
 import java.io.IOException;

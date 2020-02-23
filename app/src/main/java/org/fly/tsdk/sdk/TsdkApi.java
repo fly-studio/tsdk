@@ -15,16 +15,17 @@ import androidx.lifecycle.OnLifecycleEvent;
 import org.apache.commons.lang3.StringUtils;
 import org.fly.core.function.FunctionUtils;
 import org.fly.core.io.IoUtils;
+import org.fly.tsdk.io.ResourceHelper;
 import org.fly.tsdk.sdk.exceptions.BindMainActivityException;
 import org.fly.tsdk.sdk.exceptions.InvalidSettingException;
-import org.fly.tsdk.sdk.imp.InitSdkListener;
-import org.fly.tsdk.sdk.imp.ReportFragment;
-import org.fly.tsdk.sdk.imp.wrapper.SdkImp;
-import org.fly.tsdk.sdk.io.StorageHelper;
+import org.fly.tsdk.sdk.wrapper.InitSdkListener;
+import org.fly.tsdk.sdk.wrapper.ReportFragment;
+import org.fly.tsdk.sdk.wrapper.imp.SdkImp;
+import org.fly.tsdk.io.StorageHelper;
 import org.fly.tsdk.sdk.models.App;
 import org.fly.tsdk.sdk.models.Setting;
-import org.fly.tsdk.sdk.query.Query;
-import org.fly.tsdk.sdk.query.exceptions.ResponseException;
+import org.fly.tsdk.query.Query;
+import org.fly.tsdk.query.exceptions.ResponseException;
 import org.fly.tsdk.sdk.reports.AppReport;
 import org.fly.tsdk.sdk.reports.ReportListener;
 
@@ -89,7 +90,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         // Application's observe
 
         try {
-            Class clazz = Class.forName(this.getClass().getPackage().getName() + ".imp.wrapper." + StringUtils.capitalize(getSetting().getChannel()) + "Imp");
+            Class clazz = Class.forName(this.getClass().getPackage().getName() + ".wrapper.imp." + StringUtils.capitalize(getSetting().getChannel()) + "Imp");
             sdkImp = (SdkImp) FunctionUtils.newInstance(clazz, this);
 
         } catch (ClassNotFoundException e) {
@@ -271,7 +272,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
     private Setting readSetting() {
 
         try  {
-            Source source = StorageHelper.readAsset(getContext(), "tsdk.json");
+            Source source = ResourceHelper.readAsset(getContext(), "tsdk.json");
 
             String json = IoUtils.readJson(source);
 

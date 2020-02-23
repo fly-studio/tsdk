@@ -6,7 +6,7 @@ import androidx.annotation.Nullable;
 import org.fly.tsdk.sdk.TsdkApi;
 import org.fly.tsdk.sdk.models.App;
 import org.fly.tsdk.sdk.utils.Constants;
-import org.fly.tsdk.sdk.utils.DeviceHelper;
+import org.fly.tsdk.io.DeviceHelper;
 
 public class AppReport extends BaseReport {
     private static final String TAG = "AppReport";
