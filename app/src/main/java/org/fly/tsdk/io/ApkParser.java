@@ -108,7 +108,7 @@ public final class ApkParser implements Closeable {
                 }
             }
         } catch (IOException e) {
-            Log.e(TAG, "Fail to read apk's content", e);
+            Logger.e(TAG, "Fail to read apk's content", e);
         }
 
         return null;
@@ -137,7 +137,7 @@ public final class ApkParser implements Closeable {
                 }
             }
         } catch (IOException e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
 
         }
 
@@ -303,7 +303,7 @@ public final class ApkParser implements Closeable {
 
             return findSigningBlockIdValues(findApkSigningBlock().getKey());
         } catch (IOException e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
             return null;
         }
     }

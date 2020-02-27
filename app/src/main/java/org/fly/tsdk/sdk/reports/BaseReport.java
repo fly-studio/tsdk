@@ -4,7 +4,7 @@ import android.content.Context;
 import android.location.Location;
 import android.os.Build;
 import android.provider.Settings;
-import android.util.Log;
+
 
 import androidx.annotation.Nullable;
 
@@ -12,8 +12,11 @@ import com.lahm.library.EasyProtectorLib;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.fly.core.annotation.NotProguard;
 import org.fly.core.io.network.result.Result;
+import org.fly.core.text.encrytor.Decryptor;
 import org.fly.core.text.json.Jsonable;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.sdk.TsdkApi;
 import org.fly.tsdk.sdk.models.Device;
 import org.fly.tsdk.sdk.models.Property;
@@ -35,34 +38,20 @@ import java.util.Map;
 
 import okhttp3.HttpUrl;
 
+@NotProguard
 public class BaseReport {
 
     private static final String TAG = "BaseReport";
 
-    private TsdkApi sdkApi;
-
-    public BaseReport(TsdkApi sdkApi)
-    {
-        this.sdkApi = sdkApi;
+    public static Context getContext() {
+        return TsdkApi.getInstance().getContext();
     }
 
-    public Context getContext() {
-        return sdkApi.getContext();
+    public static Setting getSetting() {
+        return TsdkApi.getInstance().getSetting();
     }
 
-    public Setting getSetting() {
-        return sdkApi.getSetting();
-    }
-
-    public String getAlid() {
-        return sdkApi.getAlid();
-    }
-
-    public Query getQuery() {
-        return sdkApi.getQuery();
-    }
-
-    protected Device getDevice() {
+    protected static Device getDevice() {
         Device device = new Device();
 
         device.imei = DeviceHelper.getImei(getContext());
@@ -81,7 +70,7 @@ public class BaseReport {
         return device;
     }
 
-    protected Property getProperty() {
+    protected static Property getProperty() {
 
         Property property = new Property();
 
@@ -97,19 +86,19 @@ public class BaseReport {
         return property;
     }
 
-    private void validateUrl(String url)
+    private static void validateUrl(String url)
     {
         if (!Validator.equalsUrl(url))
             throw new IllegalArgumentException("Invalid URL: " + url);
     }
 
-    protected HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters, List<Pair<String, String>> queryParameters)
+    protected static HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters, List<Pair<String, String>> queryParameters)
     {
         String url = getSetting().getSdkUrl() + urlPath;
 
         if (pathParameters == null) {
             pathParameters = new HashMap<>();
-            pathParameters.put("alid", getAlid());
+            pathParameters.put("alid", TsdkApi.getInstance().getAlid());
             pathParameters.put("channel", getSetting().getChannel());
         }
 
@@ -124,22 +113,22 @@ public class BaseReport {
         return Query.buildUrl(url, queryParameters);
     }
 
-    protected HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters)
+    protected static HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters)
     {
         return buildUrl(urlPath, pathParameters, null);
     }
 
-    protected HttpUrl buildUrl(String urlPath, List<Pair<String, String>> queryParameters)
+    protected static HttpUrl buildUrl(String urlPath, List<Pair<String, String>> queryParameters)
     {
         return buildUrl(urlPath, null, queryParameters);
     }
 
-    protected HttpUrl buildUrl(String urlPath)
+    protected static HttpUrl buildUrl(String urlPath)
     {
         return buildUrl(urlPath, null, null);
     }
 
-    protected <T extends ReportResult> QueryListener queryToReportListener(final Class<T> resultClazz, final ReportListener<T> reportListener)
+    protected static <T extends ReportResult> QueryListener queryToReportListener(final Class<T> resultClazz, final ReportListener<T> reportListener)
     {
         return new QueryListener()
         {
@@ -159,14 +148,18 @@ public class BaseReport {
                     return;
                 }
 
-                if (reportResult != null && reportListener != null)
-                    reportListener.callback(reportResult, null);
+                if (reportResult != null)
+                {
+                    if (reportListener != null)
+                        reportListener.callback(reportResult, null);
+                    else
+                        Logger.d(TAG, "Recv [" + resultClazz.getSimpleName() + "]: " + ((Result) objects.getLast()).toJson());
+
+                }
                 else if (objects.getLast() == null || !(objects.getLast() instanceof Result)) // response，result.data为空
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response or result.data: " + response.getContent(), 5002), objects);
-                else if (reportListener == null)
-                    Log.d(TAG, "Recv [" + resultClazz.getSimpleName() + "]: " + ((Result) objects.getLast()).toJson());
+                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response: " + response.getContent(), 5002), objects);
                 else
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response or result.data: " + ((Result) objects.getLast()).toJson(), 5003), objects);
+                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] result.data: " + ((Result) objects.getLast()).toJson(), 5003), objects);
 
             }
 
@@ -175,15 +168,28 @@ public class BaseReport {
                 if (reportListener != null)
                     reportListener.callback(null, e);
                 else if (e != null) // 如果没有回调，则打印出错误
-                    Log.e(TAG, "[" + resultClazz.getSimpleName() + "] Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
+                    Logger.e(TAG, "[" + resultClazz.getSimpleName() + "] Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
             }
 
         };
     }
 
-    protected <T extends ReportResult> void post(HttpUrl url, Jsonable data, Class<T> resultClazz, @Nullable ReportListener<T> reportListener)
+    /**
+     * Post until Success
+     * @param urlPath
+     * @param data
+     * @param resultClazz
+     * @param reportListener
+     * @param <T>
+     */
+    protected static <T extends ReportResult> Query.Builder post(String urlPath,
+                                                          Jsonable data,
+                                                          Class<T> resultClazz,
+                                                          @Nullable ReportListener<T> reportListener)
     {
-        getQuery().postWithEncrypted(url, data, queryToReportListener(resultClazz, reportListener));
+        HttpUrl url = buildUrl(urlPath);
+        return Query.postWithEncrypted(url, data)
+                .withQueryListener(queryToReportListener(resultClazz, reportListener))
+                ;
     }
-
 }

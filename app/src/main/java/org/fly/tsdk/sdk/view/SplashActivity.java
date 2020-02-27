@@ -1,7 +1,8 @@
-package org.fly.tsdk.sdk.wrapper;
+package org.fly.tsdk.sdk.view;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Handler;
 import android.widget.ImageView;
@@ -20,11 +21,11 @@ public class SplashActivity extends Activity {
 
         setTheme(android.R.style.Theme_Light_NoTitleBar_Fullscreen);
 
-        setContentView(ResourceHelper.getId(this, "tsdk_splash", "layout"));
-        splashImage = findViewById(ResourceHelper.getId(this, "tsdk_splash_image", "id"));
-        splashImage.setImageResource(ResourceHelper.getId(this, getResources().getConfiguration().orientation == getResources().getConfiguration().ORIENTATION_LANDSCAPE ? "tsdk_splash_landscape_image" : "tsdk_splash_portrait_image", "drawable"));
+        setContentView(ResourceHelper.getId(this, "tsdk_splash", ResourceHelper.DefType.LAYOUT));
+        splashImage = findViewById(ResourceHelper.getId(this, "tsdk_splash_image", ResourceHelper.DefType.ID));
+        splashImage.setImageResource(ResourceHelper.getId(this, getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? "tsdk_splash_landscape_image" : "tsdk_splash_portrait_image", ResourceHelper.DefType.DRAWABLE));
 
-        handler.postDelayed(nextImageRunnable, 5000);
+        handler.postDelayed(nextImageRunnable, 2000);
     }
 
     private Runnable nextImageRunnable = new Runnable() {

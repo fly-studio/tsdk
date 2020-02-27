@@ -1,21 +1,19 @@
 package org.fly.tsdk.sdk.reports;
 
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.fly.tsdk.sdk.TsdkApi;
+import org.fly.core.annotation.NotProguard;
+import org.fly.tsdk.io.DeviceHelper;
 import org.fly.tsdk.sdk.models.App;
 import org.fly.tsdk.sdk.utils.Constants;
-import org.fly.tsdk.io.DeviceHelper;
 
+@NotProguard
 public class AppReport extends BaseReport {
     private static final String TAG = "AppReport";
 
-    public AppReport(TsdkApi sdkApi) {
-        super(sdkApi);
-    }
-
-    public void launch(@NonNull final ReportListener<App.LaunchResult> reportListener)
+    public static void launch(@NonNull final ReportListener<App.LaunchResult> reportListener)
     {
         App.Launch appLaunch = new App.Launch();
         appLaunch.device = getDevice();
@@ -25,15 +23,17 @@ public class AppReport extends BaseReport {
         appLaunch.channel = getSetting().getChannel();
         appLaunch.sub_channel = getSetting().getSubChannel();
 
-        post(buildUrl(Constants.LAUNCH_URL), appLaunch, App.LaunchResult.class, reportListener);
-
+        post(Constants.LAUNCH_URL, appLaunch, App.LaunchResult.class, reportListener)
+            .unlimitRetry() // always retry
+            .execute();
     }
 
-    public void start(@Nullable final ReportListener<App.StartResult> reportListener) {
+    public static void start(@Nullable final ReportListener<App.StartResult> reportListener) {
         App.Start appStart = new App.Start();
         appStart.device = getDevice();
         appStart.property = getProperty();
 
-        post(buildUrl(Constants.START_URL), appStart, App.StartResult.class, reportListener);
+        post(Constants.START_URL, appStart, App.StartResult.class, reportListener)
+            .execute();
     }
 }

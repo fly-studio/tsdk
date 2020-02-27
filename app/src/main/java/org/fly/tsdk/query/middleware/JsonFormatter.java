@@ -17,7 +17,7 @@ public class JsonFormatter implements Middleware {
 
     @Override
     public void before(Request request, LinkedList<Object> object) throws Throwable {
-        request.setHeader("Content-Type", ContentType.JSON.toString());
+        request.setHeader("Accept", ContentType.JSON.toString());
     }
 
     @Override

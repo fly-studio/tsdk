@@ -3,20 +3,15 @@ package org.fly.tsdk.io;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
-import android.content.res.AssetManager;
 import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.os.storage.StorageManager;
-import android.util.Log;
+
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.fly.core.io.IoUtils;
-
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -25,9 +20,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
-
-import okio.Okio;
-import okio.Source;
 
 public class StorageHelper {
 
@@ -61,7 +53,7 @@ public class StorageHelper {
                 }
             }
         } catch (ClassNotFoundException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
 
         return null;
@@ -147,8 +139,6 @@ public class StorageHelper {
         MediaScannerConnection.scanFile(context, paths,null, null);
     }
 
-
-
     @Nullable
     public static String getApkPath(@NonNull final Context context) {
         String apkPath = null;
@@ -159,7 +149,7 @@ public class StorageHelper {
             }
             apkPath = applicationInfo.sourceDir;
         } catch (Throwable e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
         return apkPath;
     }

@@ -7,6 +7,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.fly.core.text.json.Jsonable;
 import org.fly.tsdk.exceptions.SignatureNotFoundException;
 import org.fly.tsdk.io.ApkParser;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.io.StorageHelper;
 
 import java.io.File;
@@ -58,7 +59,7 @@ public class ChannelHelper {
             }
 
         } catch (IOException | SignatureNotFoundException e) {
-            Log.e(TAG, "Cannot read channel from apk file.", e);
+            Logger.e(TAG, "Cannot read channel from apk file.", e);
             return null;
         }
 
@@ -88,7 +89,7 @@ public class ChannelHelper {
         try {
             return new String(bytes, DEFAULT_CHARSET);
         } catch (UnsupportedEncodingException e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
 
         return null;

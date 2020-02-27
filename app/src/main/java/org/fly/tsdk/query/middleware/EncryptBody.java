@@ -6,6 +6,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.fly.core.io.network.result.EncryptedResult;
 import org.fly.core.io.network.result.Result;
 import org.fly.core.text.encrytor.Decryptor;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.query.Request;
 import org.fly.tsdk.query.Response;
 
@@ -59,7 +60,7 @@ public class EncryptBody implements Middleware {
                         request.setBody(RequestBody.create(MediaType.get("application/json; charset=utf-8"), result.toJson()));
 
                 } catch (IOException e) {
-                    Log.e(TAG, e.getMessage(), e);
+                    Logger.e(TAG, e.getMessage(), e);
                 }
             }
             // add RSA Headers
@@ -69,7 +70,7 @@ public class EncryptBody implements Middleware {
                 try {
                     rsa = URLEncoder.encode(decryptor.getPublicKey(), StandardCharsets.UTF_8.displayName());
                 } catch (UnsupportedEncodingException e) {
-                    Log.e(TAG, e.getMessage(), e);
+                    Logger.e(TAG, e.getMessage(), e);
                 }
 
                 request.setHeader("X-RSA", rsa);

@@ -2,10 +2,8 @@ package org.fly.tsdk.sdk;
 
 import android.app.Activity;
 import android.content.Context;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleObserver;
 import androidx.lifecycle.LifecycleOwner;
@@ -15,21 +13,30 @@ import androidx.lifecycle.OnLifecycleEvent;
 import org.apache.commons.lang3.StringUtils;
 import org.fly.core.function.FunctionUtils;
 import org.fly.core.io.IoUtils;
+import org.fly.tsdk.io.DeviceHelper;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.io.ResourceHelper;
-import org.fly.tsdk.sdk.exceptions.BindMainActivityException;
-import org.fly.tsdk.sdk.exceptions.InvalidSettingException;
-import org.fly.tsdk.sdk.wrapper.InitSdkListener;
-import org.fly.tsdk.sdk.wrapper.ReportFragment;
-import org.fly.tsdk.sdk.wrapper.imp.SdkImp;
-import org.fly.tsdk.io.StorageHelper;
-import org.fly.tsdk.sdk.models.App;
-import org.fly.tsdk.sdk.models.Setting;
 import org.fly.tsdk.query.Query;
 import org.fly.tsdk.query.exceptions.ResponseException;
+import org.fly.tsdk.sdk.exceptions.BindActivityException;
+import org.fly.tsdk.sdk.exceptions.InvalidSettingException;
+import org.fly.tsdk.sdk.models.App;
+import org.fly.tsdk.sdk.models.ReportResult;
+import org.fly.tsdk.sdk.models.Setting;
 import org.fly.tsdk.sdk.reports.AppReport;
 import org.fly.tsdk.sdk.reports.ReportListener;
+import org.fly.tsdk.sdk.utils.RunEnvironmentCheck;
+import org.fly.tsdk.sdk.view.LoadingDialogFragment;
+import org.fly.tsdk.sdk.view.ReportFragment;
+import org.fly.tsdk.sdk.wrapper.bean.Eventer;
+import org.fly.tsdk.sdk.wrapper.imp.SdkImp;
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import okio.Source;
 
@@ -39,28 +46,21 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
     public static final String VERSION = "1.0.0";
     private static TsdkApi self = null;
 
-    private Query query;
     private String alid;
     private Context context;
     private Setting setting;
     private LifecycleRegistry mLifecycleRegistry;
     private Activity mainActivity;
     private SdkImp sdkImp;
-    private INIT_RESULT initResult = INIT_RESULT.PREPARING;
 
-    private AppReport appReport;
+    private LoadingDialogFragment loadingDialogFragment;
 
-    public enum INIT_RESULT {
-        PREPARING,
-        SUCCESS,
-        FAIL
-    }
 
     private TsdkApi() {
 
     }
 
-    public static TsdkApi getInstance()
+    public synchronized static TsdkApi getInstance()
     {
         if (null == self)
             self = new TsdkApi();
@@ -70,71 +70,68 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
 
     public void init(@NonNull Context context)
     {
-        init(context, null);
-    }
-
-    public void init(@NonNull Context context, @Nullable final InitSdkListener initSdkListener)
-    {
         if (context.getApplicationContext() != context)
             throw new RuntimeException("Parameter#context must be an Application context.");
 
         // set Application's context
         this.setContext(context);
 
-        // new a Query
-        this.setQuery(new Query());
+        // check
+        RunEnvironmentCheck.checkClasses();
+        RunEnvironmentCheck.checkResoure(context);
+        RunEnvironmentCheck.checkPermissionsInManifest(context);
 
         // read Setting
         this.setSetting(readSetting());
 
-        // Application's observe
+        //Register EventBus
 
+        // Application's observer
+
+        // Call Imp
         try {
             Class clazz = Class.forName(this.getClass().getPackage().getName() + ".wrapper.imp." + StringUtils.capitalize(getSetting().getChannel()) + "Imp");
             sdkImp = (SdkImp) FunctionUtils.newInstance(clazz, this);
-
         } catch (ClassNotFoundException e) {
             //Imp 不存在
             throw new RuntimeException(e);
         }
 
-        // report app
-        appReport = new AppReport(this);
+        sdkImp.init(context);
 
-        appReport.launch(new ReportListener<App.LaunchResult>() {
+        Logger.d(TAG, "Tsdk init success.");
+
+        // report app
+        reportLaunch();
+    }
+
+    private void reportLaunch(){
+
+        EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT, ResourceHelper.getString(getContext(), "tsdk_init")));
+
+        AppReport.launch(new ReportListener<App.LaunchResult>() {
             @Override
             public void callback(App.LaunchResult launchResult, ResponseException e) {
 
-                if (e != null) // 网络出现问题，或者上报字段有误
+                if (e != null) // 上报字段有误
                 {
-                    Log.e(TAG, "SDK init failed: " + e.getMessage() + ", Code:" + e.getCode(), e);
-                    initResult = INIT_RESULT.FAIL;
+                    Logger.e(TAG, "App.Launch failed: " + e.getMessage() + ", Code:" + e.getCode(), e);
 
-                    if (null != initSdkListener)
-                        initSdkListener.callback(INIT_RESULT.FAIL, e.getMessage());
+                    EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT_FAIL, ResourceHelper.getString(getContext(), "tsdk_init_success")));
 
                 } else {
                     //重置为线上的public key
-                    getQuery().setPublicKey(launchResult.getPublicKey());
+                    Query.setPublicKey(launchResult.getPublicKey());
                     //设置alid
                     setAlid(launchResult.getAlid());
 
-                    Log.d(TAG, "Tsdk init success.");
+                    Logger.e(TAG, "App.Launch success: " + getAlid());
 
-                    initResult = INIT_RESULT.SUCCESS;
-
-                    if (null != initSdkListener)
-                        initSdkListener.callback(INIT_RESULT.SUCCESS, null);
+                    EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT_SUCCESS, ResourceHelper.getString(getContext(), "tsdk_init_fail")));
 
                 }
             }
         });
-
-    }
-
-    public boolean isInit()
-    {
-        return initResult == INIT_RESULT.SUCCESS;
     }
 
     public Context getContext() {
@@ -145,12 +142,8 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         return setting;
     }
 
-    public String getAlid() {
+    public synchronized String getAlid() {
         return alid;
-    }
-
-    public Query getQuery() {
-        return query;
     }
 
     private void setContext(Context context) {
@@ -161,12 +154,8 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         this.setting = setting;
     }
 
-    private void setAlid(String alid) {
+    private synchronized void setAlid(String alid) {
         this.alid = alid;
-    }
-
-    private void setQuery(Query query) {
-        this.query = query;
     }
 
     protected void setSdkImp(SdkImp sdkImp) {
@@ -187,7 +176,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
     public void bindMainActivity(Activity activity)
     {
         if (mainActivity != null)
-            throw new BindMainActivityException("SDK can bound ONE MainActivity. or unbind first.");
+            throw new BindActivityException("SDK can bound ONE MainActivity. or unbind first.");
 
         mainActivity = activity;
 
@@ -200,7 +189,6 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         }
 
         mLifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);
-
     }
 
     public void unbindMainActivity()
@@ -213,48 +201,78 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
-    public void onCreate() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onCreate");
+    public void onActivityCreate() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onCreate");
+        DeviceHelper.requirePermissions(getMainActivity(), RunEnvironmentCheck.PERMISSIONS);
+        loadingDialogFragment = LoadingDialogFragment.getInstance(getMainActivity());
 
+        EventBus.getDefault().register(this);
 
         sdkImp.onCreate();
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_START)
-    public void onStart() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onStart");
+    public void onActivityStart() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onStart");
 
         sdkImp.onStart();
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
-    public void onResume() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onResume");
+    public void onActivityResume() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onResume");
 
-        appReport.start(null);
+        AppReport.start(null);
 
         sdkImp.onResume();
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-    public void onPause() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onPause");
+    public void onActivityPause() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onPause");
 
         sdkImp.onPause();
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
-    public void onStop() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onStop");
+    public void onActivityStop() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onStop");
 
         sdkImp.onStop();
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-    public void onDestroy() {
-        Log.d(TAG, getMainActivity().getLocalClassName() + ".onDestroy");
+    public void onActivityDestroy() {
+        Logger.d(TAG, getMainActivity().getLocalClassName() + ".onDestroy");
+
+        if (null != loadingDialogFragment)
+            loadingDialogFragment.dettachFromActivity();
+
+        EventBus.getDefault().unregister(this);
 
         sdkImp.onDestroy();
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN, sticky = true)
+    public void onActivityEvent(Eventer eventer)
+    {
+        loadingDialogFragment.setMessage(eventer.getMessage());
+        switch (eventer.getType())
+        {
+            case INIT:
+                loadingDialogFragment.show(getMainActivity());
+                break;
+            case INIT_FAIL:
+                loadingDialogFragment.show(getMainActivity());
+                break;
+            case INIT_SUCCESS:
+                loadingDialogFragment.hide();
+                break;
+            case LOADING:
+                break;
+            case LOADED:
+                break;
+        }
     }
 
     public void login() {
@@ -287,15 +305,6 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
             throw new InvalidSettingException(e);
         }
 
-    }
-
-    private void waitForInit() {
-        if (initResult == INIT_RESULT.PREPARING)
-        {
-
-        } else {
-
-        }
     }
 
 }

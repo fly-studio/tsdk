@@ -1,14 +1,17 @@
 package org.fly.tsdk.query;
 
 import android.os.AsyncTask;
+import android.os.Build;
 
 import org.apache.commons.lang3.StringUtils;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.query.exceptions.ResponseException;
 import org.fly.tsdk.query.middleware.Middleware;
 import org.fly.tsdk.structs.AsyncTaskResult;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,7 +34,9 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
     private List<Middleware> middlewareList = new ArrayList<>();
     private QueryListener queryListener;
     private File file;
+    private int retries = 0;
     final private LinkedList<Object> middlewareObjects  = new LinkedList<>();
+
 
     private QueryTask() {
 
@@ -44,6 +49,11 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
     public QueryTask setFile(File file) {
         this.file = file;
+        return this;
+    }
+
+    public QueryTask setRetries(int retries) {
+        this.retries = retries;
         return this;
     }
 
@@ -99,37 +109,70 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
     @Override
     protected AsyncTaskResult<Response> doInBackground(Void... calls) {
-
         try {
+            middlewareObjects.clear();
 
-            for (Middleware middleware: middlewareList) {
+            for (Middleware middleware : middlewareList) {
                 middleware.before(request, middlewareObjects);
             }
 
-            Response response = call(request);
-
-            for (Middleware middleware: middlewareList) {
-                middleware.after(response, middlewareObjects);
-            }
-
-            // server error
-            if (response.getCode() != 200)
-            {
-                throw new ResponseException(response.getStatus() + ": " + response.getContent(), response.getCode());
-            }
+            Response response = callWithRetry(request);
 
             return new AsyncTaskResult<>(response);
 
         } catch (Throwable e) {
-
-            publishProgress(0L, 0L);
-            return new AsyncTaskResult<>(e);
+            return returnException(e);
         }
+    }
 
+    private AsyncTaskResult<Response> returnException(Throwable e)
+    {
+        publishProgress(0L, 0L);
+        return new AsyncTaskResult<>(e);
+    }
+
+    /**
+     * retry 500 or timeout
+     * @param request
+     * @return
+     * @throws Throwable
+     */
+    protected Response callWithRetry(Request request) throws Throwable {
+        int fails = 0;
+        Throwable lastError = null;
+        while (true)
+        {
+            try {
+                Response response = httpCall(request);
+
+                for (Middleware middleware : middlewareList) {
+                    middleware.after(response, middlewareObjects);
+                }
+
+                if (response.getCode() == 500) // 服务器错误, 也可重试
+                {
+                    fails++;
+                    lastError = new ResponseException(response.getStatus() + ": " + response.getContent(), response.getCode());
+                } else {
+                    return response;
+                }
+
+            } catch (SocketTimeoutException e)
+            {
+                fails++;
+                lastError = e;
+            }
+
+            if (retries >= 0 && fails > retries) {
+                throw lastError;
+            }
+
+            Logger.e(TAG, "Retry " + request.getUrl() + " " + fails + " times");
+        }
     }
 
 
-    protected Response call(Request request) throws Throwable {
+    protected Response httpCall(Request request) throws Throwable {
 
         OkHttpClient okHttpClient = getHttpClient(request);
 
@@ -246,6 +289,18 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
             return this;
         }
 
+        /**
+         * -1: loop until connected
+         * 0: no try
+         * @param retries
+         * @return
+         */
+        public Builder retries(int retries)
+        {
+            queryTask.setRetries(retries);
+            return this;
+        }
+
         public Builder queryListener(QueryListener queryListener) {
             queryTask.setQueryListener(queryListener);
             return this;
@@ -265,4 +320,6 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
             return queryTask;
         }
     }
+
+
 }

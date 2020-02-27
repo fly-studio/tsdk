@@ -1,4 +1,4 @@
-package org.fly.tsdk.sdk.wrapper;
+package org.fly.tsdk.sdk.view;
 
 import android.app.Activity;
 import android.app.Fragment;
@@ -10,7 +10,7 @@ import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LifecycleRegistry;
 import androidx.lifecycle.LifecycleRegistryOwner;
 
-/**
+/*
  * Internal class that dispatches initialization events.
  *
  * @hide
@@ -18,12 +18,12 @@ import androidx.lifecycle.LifecycleRegistryOwner;
 @SuppressWarnings("UnknownNullness") // TODO https://issuetracker.google.com/issues/112197238
 @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP_PREFIX)
 public class ReportFragment extends Fragment {
-    private static final String REPORT_FRAGMENT_TAG = "androidx.lifecycle"
+    private static final String REPORT_FRAGMENT_TAG = "android.arch.lifecycle"
             + ".LifecycleDispatcher.report_fragment_tag";
 
     private LifecycleOwner lifecycleOwner;
 
-    public ReportFragment setLifecycleOwner(LifecycleOwner lifecycleOwner)
+    public ReportFragment setLifecycleOwner(final LifecycleOwner lifecycleOwner)
     {
         this.lifecycleOwner = lifecycleOwner;
         return this;
@@ -34,7 +34,9 @@ public class ReportFragment extends Fragment {
         // FragmentActivity from support lib, so we use framework fragments for activities
         android.app.FragmentManager manager = activity.getFragmentManager();
         if (manager.findFragmentByTag(REPORT_FRAGMENT_TAG) == null) {
-            manager.beginTransaction().add(new ReportFragment().setLifecycleOwner(lifecycleOwner), REPORT_FRAGMENT_TAG).commit();
+            manager.beginTransaction()
+                    .add(new ReportFragment().setLifecycleOwner(lifecycleOwner), REPORT_FRAGMENT_TAG)
+                    .commit();
             // Hopefully, we are the first to make a transaction.
             manager.executePendingTransactions();
         }

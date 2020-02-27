@@ -1,6 +1,7 @@
 package org.fly.tsdk.io;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -13,19 +14,19 @@ import android.os.Build;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.WindowManager;
 
 import org.apache.commons.lang3.time.DateFormatUtils;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-import static android.content.Context.LOCATION_SERVICE;
 
 public class DeviceHelper {
     private static final String TAG = "DeviceHelper";
+
     public static String getMetrics(Context context)
     {
         DisplayMetrics display = context.getResources().getDisplayMetrics();
@@ -56,7 +57,7 @@ public class DeviceHelper {
                 return imei;
             }
         } catch (SecurityException e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
 
         return null;
@@ -73,7 +74,7 @@ public class DeviceHelper {
                 return "";
             }
         } catch (Exception e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
 
         return versionName;
@@ -86,7 +87,7 @@ public class DeviceHelper {
             PackageInfo packageInfo = packageManager.getPackageInfo(context.getPackageName(), 0);
             versionCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? packageInfo.getLongVersionCode() : packageInfo.versionCode;
         } catch (Exception e) {
-            Log.e(TAG, e.getMessage(), e);
+            Logger.e(TAG, e.getMessage(), e);
         }
 
         return versionCode;
@@ -147,7 +148,7 @@ public class DeviceHelper {
             return null;
         }
 
-        LocationManager mLocationManager = (LocationManager)context.getSystemService(LOCATION_SERVICE);
+        LocationManager mLocationManager = (LocationManager)context.getSystemService(android.content.Context.LOCATION_SERVICE);
         List<String> providers = mLocationManager.getProviders(true);
         Location bestLocation = null;
         for (String provider : providers) {
@@ -268,5 +269,23 @@ public class DeviceHelper {
 
     public static boolean hasPermission(Context mContexts, String permission) {
         return Build.VERSION.SDK_INT < 23 || mContexts.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public static void requirePermissions(Activity activity, String[] permissions)
+    {
+        if (Build.VERSION.SDK_INT >= 23)
+        {
+            List<String> needs = new ArrayList<>();
+            for (String permission : permissions)
+            {
+                if (!hasPermission(activity, permission))
+                {
+                    needs.add(permission);
+                }
+            }
+
+            if (!needs.isEmpty())
+                activity.requestPermissions(needs.toArray(new String[0]), 10000);
+        }
     }
 }

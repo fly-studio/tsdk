@@ -3,8 +3,6 @@ package demo;
 import android.app.Activity;
 import android.os.Bundle;
 
-import androidx.appcompat.app.AppCompatActivity;
-
 import org.fly.tsdk.R;
 import org.fly.tsdk.sdk.TsdkApi;
 
