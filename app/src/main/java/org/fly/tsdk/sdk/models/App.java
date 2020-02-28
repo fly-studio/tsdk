@@ -1,7 +1,6 @@
 package org.fly.tsdk.sdk.models;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import org.fly.core.annotation.NotProguard;
 import org.fly.core.text.json.Jsonable;

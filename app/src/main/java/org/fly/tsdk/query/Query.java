@@ -3,19 +3,19 @@ package org.fly.tsdk.query;
 import android.os.AsyncTask;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.fly.core.text.encrytor.Decryptor;
 import org.fly.core.text.json.Jsonable;
+import org.fly.tsdk.io.Logger;
+import org.fly.tsdk.query.exceptions.ResponseException;
 import org.fly.tsdk.query.middleware.EncryptBody;
 import org.fly.tsdk.query.middleware.JsonFormatter;
 
 import java.io.File;
-import java.util.List;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
 import okhttp3.RequestBody;
 
 public class Query {
@@ -32,33 +32,19 @@ public class Query {
 
     public final static int UNLIMIT_RETRY = -1;
 
-    public static HttpUrl buildUrl(String baseUrl, List<Pair<String, String>> queryParameters)
-    {
-        HttpUrl.Builder builder = HttpUrl.parse(baseUrl).newBuilder();
-
-        if (null != queryParameters)
-        {
-            for (Pair<String, String> query: queryParameters) {
-                builder.addQueryParameter(query.getKey(), query.getValue());
-            }
-        }
-
-        return builder.build();
-    }
-
     public synchronized static void setPublicKey(String publicKey) {
         decryptor.setKey(publicKey, null);
     }
 
     public static class Builder {
         private QueryTask.Builder builder = new QueryTask.Builder();
-        private Request.Builder requestBuilder = new Request.Builder();
+        private Request.Builder requestBuilder;
         /**
-         * any with json
+         * any http call with json
          * @param url
          * @param data
          */
-        public Builder(String method, HttpUrl url, @NonNull Jsonable data) {
+        public Builder(String method, String url, @NonNull Jsonable data) {
 
             requestBuilder = new Request.Builder()
                     .method(method)
@@ -68,12 +54,12 @@ public class Query {
         }
 
         /**
-         * Any with body
+         * Any http call with body
          * @param method
          * @param url
          * @param body
          */
-        public Builder(String method, HttpUrl url, RequestBody body)
+        public Builder(String method, String url, RequestBody body)
         {
             requestBuilder = new Request.Builder()
                     .method(method)
@@ -83,10 +69,10 @@ public class Query {
         }
 
         /**
-         * Any
+         * Any http call
          * @param url
          */
-        public Builder(String method, HttpUrl url)
+        public Builder(String method, String url)
         {
             requestBuilder = new Request.Builder()
                     .method(method)
@@ -94,9 +80,39 @@ public class Query {
             ;
         }
 
-        public Builder head(String name, String value)
+        public Builder urlParameter(String name, String value)
+        {
+            requestBuilder.urlParameter(name, value);
+            return this;
+        }
+
+        public Builder urlParameters(Map<String, String> urlParameters)
+        {
+            requestBuilder.urlParameters(urlParameters);
+            return this;
+        }
+
+        public Builder queryParameter(String name, String value)
+        {
+            requestBuilder.queryParameter(name, value);
+            return this;
+        }
+
+        public Builder queryParameter(Map<String, String> queryParameter)
+        {
+            requestBuilder.urlParameters(queryParameter);
+            return this;
+        }
+
+        public Builder header(String name, String value)
         {
             requestBuilder.header(name, value);
+            return this;
+        }
+
+        public Builder headers(Map<String, String> headers)
+        {
+            requestBuilder.headers(headers);
             return this;
         }
 
@@ -105,38 +121,80 @@ public class Query {
             return this;
         }
 
+        public Builder cookies(Map<String, String> cookies)
+        {
+            requestBuilder.cookies(cookies);
+            return this;
+        }
+
+        /**
+         * retry N times
+         * -1: always retry until success
+         * 0: no retry
+         * @param retries
+         * @return
+         */
         public Builder retries(int retries)
         {
             builder.retries(retries);
             return this;
         }
 
+        /**
+         * always retry when 500 or timeout
+         * @return
+         */
         public Builder unlimitRetry()
         {
             return retries(UNLIMIT_RETRY);
         }
 
+        /**
+         * download a file
+         * @param file
+         * @return
+         */
         public Builder writeToFile(File file)
         {
             builder.file(file);
             return this;
         }
 
+        /**
+         * with a middleware of {@link JsonFormatter}
+         * @return
+         */
         public Builder withJson() {
             builder.middleware(new JsonFormatter());
             return this;
         }
 
+        /**
+         * with a middleware of {@link EncryptBody}
+         * @return
+         */
         public Builder withEncrypted() {
             builder.middleware(new EncryptBody(decryptor));
             return this;
         }
 
+        /**
+         * set a {@link QueryListener}
+         * conflict with {@link #syncExecute}
+         *
+         * @param queryListener
+         * @return
+         */
         public Builder withQueryListener(QueryListener queryListener) {
             builder.queryListener(queryListener);
             return this;
         }
 
+        /**
+         * async execute
+         * If you wanna a callback, you must {@link #withQueryListener}
+         * @return
+         */
         public AsyncTask execute()
         {
             return builder
@@ -145,57 +203,101 @@ public class Query {
                     .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
         }
 
+        /**
+         * sync execute
+         *
+         * It'll disable the QueryListener that you defined;
+         *
+         * @return
+         * @throws Throwable
+         */
+        public Response syncExecute() throws ResponseException
+        {
+            CountDownLatch countDownLatch = new CountDownLatch(1);
+
+            final LinkedList<Object> result = new LinkedList<>();
+
+            builder.queryListener(new QueryListener() {
+                @Override
+                public void onDone(Response response) {
+                    result.add(response);
+                    countDownLatch.countDown();
+                }
+
+                @Override
+                public void onError(ResponseException e) {
+                    result.add(e);
+                    countDownLatch.countDown();
+                }
+            });
+
+            try {
+                // wait for complete
+                countDownLatch.await();
+            } catch (InterruptedException e)
+            {
+                Logger.e(TAG, e.getMessage(), e);
+            }
+
+
+            Object first = result.poll();
+            if (first instanceof ResponseException)
+                throw (ResponseException) first;
+            else
+                return (Response) first;
+        }
+
     }
 
-    public static Builder option(HttpUrl url)
+    public static Builder option(String url)
     {
         return new Builder(OPTION, url);
     }
 
-    public static Builder HEAD(HttpUrl url)
+    public static Builder HEAD(String url)
+    {
+        return new Builder(HEAD, url);
+    }
+
+    public static Builder get(String url)
     {
         return new Builder(GET, url);
     }
 
-    public static Builder get(HttpUrl url)
-    {
-        return new Builder(GET, url);
-    }
-
-    public static Builder delete(HttpUrl url, RequestBody body)
+    public static Builder delete(String url, RequestBody body)
     {
         return new Builder(DELETE, url, body);
     }
 
-    public static Builder put(HttpUrl url, RequestBody body)
+    public static Builder put(String url, RequestBody body)
     {
         return new Builder(PUT, url, body);
     }
 
-    public static Builder patch(HttpUrl url, RequestBody body)
+    public static Builder patch(String url, RequestBody body)
     {
         return new Builder(PATCH, url, body);
     }
 
-    public static Builder download(HttpUrl url, File file)
+    public static Builder download(String url, File file)
     {
         return new Builder(GET, url)
                 .writeToFile(file);
     }
 
-    public static Builder getWithJson(HttpUrl url)
+    public static Builder getWithJson(String url)
     {
         return new Builder(GET, url)
                 .withJson();
     }
 
-    public static Builder postWithJson(HttpUrl url, @NonNull Jsonable data)
+    public static Builder postWithJson(String url, @NonNull Jsonable data)
     {
         return new Builder(POST, url, data)
                 .withJson();
     }
 
-    public static Builder postWithEncrypted(HttpUrl url, @NonNull Jsonable data)
+    public static Builder postWithEncrypted(String url, @NonNull Jsonable data)
     {
         return new Builder(POST, url, data)
                 .withJson()

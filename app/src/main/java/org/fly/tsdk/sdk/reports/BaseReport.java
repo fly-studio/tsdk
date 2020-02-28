@@ -2,56 +2,54 @@ package org.fly.tsdk.sdk.reports;
 
 import android.content.Context;
 import android.location.Location;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.provider.Settings;
-
 
 import androidx.annotation.Nullable;
 
 import com.lahm.library.EasyProtectorLib;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.fly.core.annotation.NotProguard;
 import org.fly.core.io.network.result.Result;
-import org.fly.core.text.encrytor.Decryptor;
 import org.fly.core.text.json.Jsonable;
+import org.fly.tsdk.io.DeviceHelper;
 import org.fly.tsdk.io.Logger;
-import org.fly.tsdk.sdk.TsdkApi;
-import org.fly.tsdk.sdk.models.Device;
-import org.fly.tsdk.sdk.models.Property;
-import org.fly.tsdk.sdk.models.ReportResult;
-import org.fly.tsdk.sdk.models.Setting;
 import org.fly.tsdk.query.Query;
 import org.fly.tsdk.query.QueryListener;
 import org.fly.tsdk.query.Response;
 import org.fly.tsdk.query.exceptions.InvalidJsonException;
 import org.fly.tsdk.query.exceptions.ResponseException;
-import org.fly.tsdk.text.Validator;
-import org.fly.tsdk.io.DeviceHelper;
+import org.fly.tsdk.sdk.TsdkApi;
+import org.fly.tsdk.sdk.models.Device;
+import org.fly.tsdk.sdk.models.Property;
+import org.fly.tsdk.sdk.models.ReportResult;
+import org.fly.tsdk.sdk.models.Setting;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
-import okhttp3.HttpUrl;
-
-@NotProguard
-public class BaseReport {
+abstract public class BaseReport {
 
     private static final String TAG = "BaseReport";
 
-    public static Context getContext() {
-        return TsdkApi.getInstance().getContext();
+    private TsdkApi tsdkApi;
+
+    public BaseReport(TsdkApi tsdkApi) {
+        this.tsdkApi = tsdkApi;
     }
 
-    public static Setting getSetting() {
-        return TsdkApi.getInstance().getSetting();
+    protected Context getContext() {
+        return tsdkApi.getContext();
     }
 
-    protected static Device getDevice() {
+    protected Setting getSetting() {
+        return tsdkApi.getSetting();
+    }
+
+    protected Device getDevice() {
         Device device = new Device();
 
         device.imei = DeviceHelper.getImei(getContext());
@@ -70,7 +68,7 @@ public class BaseReport {
         return device;
     }
 
-    protected static Property getProperty() {
+    protected Property getProperty() {
 
         Property property = new Property();
 
@@ -86,110 +84,98 @@ public class BaseReport {
         return property;
     }
 
-    private static void validateUrl(String url)
+    protected Map<String, String> getDefaultUrlParameter()
     {
-        if (!Validator.equalsUrl(url))
-            throw new IllegalArgumentException("Invalid URL: " + url);
+        Map<String, String> urlParameters = new HashMap<>();
+        urlParameters.put("alid", tsdkApi.getAlid());
+        urlParameters.put("channel", getSetting().getChannel());
+
+        return urlParameters;
     }
 
-    protected static HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters, List<Pair<String, String>> queryParameters)
+    protected <T extends ReportResult> Query.Builder buildQuery(final String urlPath, Jsonable data)
     {
         String url = getSetting().getSdkUrl() + urlPath;
 
-        if (pathParameters == null) {
-            pathParameters = new HashMap<>();
-            pathParameters.put("alid", TsdkApi.getInstance().getAlid());
-            pathParameters.put("channel", getSetting().getChannel());
+        return Query.postWithJson(url, data)
+                .urlParameters(getDefaultUrlParameter());
+    }
+
+
+    public <R extends ReportResult> AsyncTask call(Query.Builder builder,
+                                                   Class<R> resultClazz,
+                                                   @Nullable ReportListener<R> reportListener)
+    {
+        return builder
+                .withJson()
+                .withEncrypted()
+                .withQueryListener(queryToReportListener(resultClazz, reportListener))
+                .execute();
+    }
+
+    public <R extends ReportResult> R syncCall(Query.Builder builder, Class<R> resultClazz) throws ResponseException
+    {
+        Response response = builder
+                .withJson()
+                .withEncrypted()
+                .syncExecute()
+                ;
+
+        return parseResult(response, resultClazz);
+    }
+
+    @Nullable
+    protected <R extends ReportResult> R parseResult(Response response, final Class<R> resultClazz) throws ResponseException
+    {
+        LinkedList<Object> attachments = response.getAttachments();
+
+        if (attachments == null || !(attachments.peekLast() instanceof Result))
+            throw new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response: " + response.getContent(), 5001, response);
+
+        try {
+            //读取result
+            Result result = (Result) attachments.getLast();
+            if (!StringUtils.isEmpty(result.data)) {
+                R reportResult = ReportResult.fromJson(resultClazz, result.data);
+
+                Logger.d(TAG, "Recv [" + resultClazz.getSimpleName() + "]: " + reportResult.toJson());
+                return reportResult;
+            }
+
+        } catch (IOException e) {
+            throw new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] result.data: " + ((Result) attachments.getLast()).toJson(), 5003, response, e);
         }
 
-        for (Map.Entry<String, String> entry: pathParameters.entrySet())
-        {
-            url = url.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
-        }
-
-
-        validateUrl(url);
-
-        return Query.buildUrl(url, queryParameters);
+        return null;
     }
 
-    protected static HttpUrl buildUrl(String urlPath, Map<String, String> pathParameters)
-    {
-        return buildUrl(urlPath, pathParameters, null);
-    }
-
-    protected static HttpUrl buildUrl(String urlPath, List<Pair<String, String>> queryParameters)
-    {
-        return buildUrl(urlPath, null, queryParameters);
-    }
-
-    protected static HttpUrl buildUrl(String urlPath)
-    {
-        return buildUrl(urlPath, null, null);
-    }
-
-    protected static <T extends ReportResult> QueryListener queryToReportListener(final Class<T> resultClazz, final ReportListener<T> reportListener)
+    protected <R extends ReportResult> QueryListener queryToReportListener(final Class<R> resultClazz, final ReportListener<R> reportListener)
     {
         return new QueryListener()
         {
             @Override
-            public void onDone(Response response, LinkedList<Object> objects) {
-                T reportResult = null;
+            public void onDone(Response response) {
+
                 try {
-                    if (!objects.isEmpty() && objects.getLast() instanceof Result) {
-                        //读取result
-                        Result result = (Result) objects.getLast();
-                        if (!StringUtils.isEmpty(result.data)) {
-                            reportResult = ReportResult.fromJson(resultClazz, result.data);
-                        }
-                    }
-                } catch (IOException e) {
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] JSON: " + e.getMessage(), 5001, e), objects);
-                    return;
-                }
+                    R reportResult = parseResult(response, resultClazz);
 
-                if (reportResult != null)
-                {
                     if (reportListener != null)
-                        reportListener.callback(reportResult, null);
-                    else
-                        Logger.d(TAG, "Recv [" + resultClazz.getSimpleName() + "]: " + ((Result) objects.getLast()).toJson());
+                        reportListener.dispatchResult(reportResult, null);
 
+                } catch (ResponseException e)
+                {
+                    onError(e);
                 }
-                else if (objects.getLast() == null || !(objects.getLast() instanceof Result)) // response，result.data为空
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] Response: " + response.getContent(), 5002), objects);
-                else
-                    this.onError(new InvalidJsonException("Invalid [" + resultClazz.getSimpleName() + "] result.data: " + ((Result) objects.getLast()).toJson(), 5003), objects);
-
             }
 
             @Override
-            public void onError(ResponseException e, LinkedList<Object> objects) {
-                if (reportListener != null)
-                    reportListener.callback(null, e);
-                else if (e != null) // 如果没有回调，则打印出错误
-                    Logger.e(TAG, "[" + resultClazz.getSimpleName() + "] Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
-            }
+            public void onError(ResponseException e) {
+                Logger.e(TAG, "[" + resultClazz.getSimpleName() + "] Report error:" + e.getMessage() + "; Code: " + e.getCode(), e);
 
+                if (reportListener != null)
+                    reportListener.dispatchResult(null, e);
+            }
         };
     }
 
-    /**
-     * Post until Success
-     * @param urlPath
-     * @param data
-     * @param resultClazz
-     * @param reportListener
-     * @param <T>
-     */
-    protected static <T extends ReportResult> Query.Builder post(String urlPath,
-                                                          Jsonable data,
-                                                          Class<T> resultClazz,
-                                                          @Nullable ReportListener<T> reportListener)
-    {
-        HttpUrl url = buildUrl(urlPath);
-        return Query.postWithEncrypted(url, data)
-                .withQueryListener(queryToReportListener(resultClazz, reportListener))
-                ;
-    }
 }

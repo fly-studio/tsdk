@@ -1,7 +1,5 @@
 package org.fly.tsdk.query.middleware;
 
-import android.util.Log;
-
 import org.apache.commons.lang3.StringUtils;
 import org.fly.core.io.network.result.EncryptedResult;
 import org.fly.core.io.network.result.Result;

@@ -1,5 +1,6 @@
 package org.fly.tsdk.sdk.wrapper.imp;
 
+import android.app.Activity;
 import android.content.Context;
 
 import org.fly.tsdk.sdk.TsdkApi;
@@ -24,12 +25,12 @@ public abstract class SdkImp {
     abstract public void pay();
     abstract public void exitApp();
 
-    abstract public void onCreate();
-    abstract public void onStart();
-    abstract public void onResume();
-    abstract public void onPause();
-    abstract public void onStop();
-    abstract public void onDestroy();
+    abstract public void onActivityCreate(Activity activity);
+    abstract public void onActivityStart(Activity activity);
+    abstract public void onActivityResume(Activity activity);
+    abstract public void onActivityPause(Activity activity);
+    abstract public void onActivityStop(Activity activity);
+    abstract public void onActivityDestroy(Activity activity);
 
 
 }

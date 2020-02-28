@@ -1,5 +1,6 @@
 package org.fly.tsdk.sdk.wrapper.imp;
 
+import android.app.Activity;
 import android.content.Context;
 
 import org.fly.tsdk.sdk.TsdkApi;
@@ -36,32 +37,32 @@ public class TimesImp extends SdkImp {
     }
 
     @Override
-    public void onCreate() {
+    public void onActivityCreate(Activity activity) {
 
     }
 
     @Override
-    public void onStart() {
+    public void onActivityStart(Activity activity) {
 
     }
 
     @Override
-    public void onResume() {
+    public void onActivityResume(Activity activity) {
 
     }
 
     @Override
-    public void onPause() {
+    public void onActivityPause(Activity activity) {
 
     }
 
     @Override
-    public void onStop() {
+    public void onActivityStop(Activity activity) {
 
     }
 
     @Override
-    public void onDestroy() {
+    public void onActivityDestroy(Activity activity) {
 
     }
 }

@@ -7,7 +7,6 @@ import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.os.storage.StorageManager;
 
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 

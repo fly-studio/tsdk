@@ -1,7 +1,5 @@
 package org.fly.tsdk.io;
 
-import android.util.Log;
-
 import org.apache.commons.lang3.tuple.Pair;
 import org.fly.core.io.IoUtils;
 import org.fly.tsdk.exceptions.SignatureNotFoundException;

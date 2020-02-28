@@ -3,7 +3,6 @@ package org.fly.tsdk.query.cookie;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
-import android.util.Log;
 
 import org.fly.tsdk.io.Logger;
 

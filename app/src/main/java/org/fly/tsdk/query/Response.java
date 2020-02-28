@@ -4,6 +4,7 @@ import org.fly.tsdk.query.cookie.CookieJarImpl;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +22,7 @@ public class Response {
     private MediaType contentType;
     private String content;
     private File file;
+    private LinkedList<Object> attachments;
 
     private Response() {}
 
@@ -124,6 +126,15 @@ public class Response {
         return contentType;
     }
 
+    public LinkedList<Object> getAttachments() {
+        return attachments;
+    }
+
+    public Response setAttachments(LinkedList<Object> attachments) {
+        this.attachments = attachments;
+        return this;
+    }
+
     public static class Builder {
         private Response response = new Response();
 
@@ -165,6 +176,11 @@ public class Response {
         public Builder status(int code, String status)
         {
             response.setStatus(code, status);
+            return this;
+        }
+
+        public Builder attach(LinkedList<Object> objects) {
+            response.setAttachments(objects);
             return this;
         }
 

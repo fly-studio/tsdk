@@ -1,14 +1,14 @@
 package org.fly.tsdk.structs;
 
-public class AsyncTaskResult<T> {
+public class AsyncTaskResult<T, E extends Throwable> {
     private T result;
-    private Throwable error;
+    private E error;
 
     public T getResult() {
         return result;
     }
 
-    public Throwable getError() {
+    public E getError() {
         return error;
     }
 
@@ -16,7 +16,7 @@ public class AsyncTaskResult<T> {
         this.result = result;
     }
 
-    public AsyncTaskResult(Throwable error) {
+    public AsyncTaskResult(E error) {
         this.error = error;
     }
 }

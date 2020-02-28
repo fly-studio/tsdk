@@ -18,6 +18,9 @@ public class JsonFormatter implements Middleware {
     @Override
     public void before(Request request, LinkedList<Object> object) throws Throwable {
         request.setHeader("Accept", ContentType.JSON.toString());
+
+        if (request.getBody() != null && request.getBody().contentType() != null)
+            request.setHeader("Content-Type", request.getBody().contentType().toString());
     }
 
     @Override
@@ -31,9 +34,9 @@ public class JsonFormatter implements Middleware {
                 Result result = Result.fromJson(Result.class, json);
 
                 if (result.code == 422)
-                    throw new InvalidFiledException(result.message, result.code);
+                    throw new InvalidFiledException(result.message, result.code, response);
                 else if (result.code != 0 || response.getCode() != 200)
-                    throw new ResponseException(result.message, result.code);
+                    throw new ResponseException(result.message, result.code, response);
 
                 objects.add(result);
             }

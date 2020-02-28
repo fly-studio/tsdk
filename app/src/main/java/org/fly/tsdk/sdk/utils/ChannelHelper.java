@@ -1,7 +1,6 @@
 package org.fly.tsdk.sdk.utils;
 
 import android.content.Context;
-import android.util.Log;
 
 import org.apache.commons.lang3.StringUtils;
 import org.fly.core.text.json.Jsonable;

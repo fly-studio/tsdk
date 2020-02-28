@@ -16,15 +16,10 @@ import org.fly.core.io.IoUtils;
 import org.fly.tsdk.io.DeviceHelper;
 import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.io.ResourceHelper;
-import org.fly.tsdk.query.Query;
-import org.fly.tsdk.query.exceptions.ResponseException;
 import org.fly.tsdk.sdk.exceptions.BindActivityException;
 import org.fly.tsdk.sdk.exceptions.InvalidSettingException;
-import org.fly.tsdk.sdk.models.App;
-import org.fly.tsdk.sdk.models.ReportResult;
 import org.fly.tsdk.sdk.models.Setting;
-import org.fly.tsdk.sdk.reports.AppReport;
-import org.fly.tsdk.sdk.reports.ReportListener;
+import org.fly.tsdk.sdk.reports.ReportManager;
 import org.fly.tsdk.sdk.utils.RunEnvironmentCheck;
 import org.fly.tsdk.sdk.view.LoadingDialogFragment;
 import org.fly.tsdk.sdk.view.ReportFragment;
@@ -35,8 +30,6 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import okio.Source;
 
@@ -54,7 +47,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
     private SdkImp sdkImp;
 
     private LoadingDialogFragment loadingDialogFragment;
-
+    private ReportManager reportManager;
 
     private TsdkApi() {
 
@@ -74,7 +67,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
             throw new RuntimeException("Parameter#context must be an Application context.");
 
         // set Application's context
-        this.setContext(context);
+        setContext(context);
 
         // check
         RunEnvironmentCheck.checkClasses();
@@ -82,15 +75,15 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         RunEnvironmentCheck.checkPermissionsInManifest(context);
 
         // read Setting
-        this.setSetting(readSetting());
+        readSetting(context);
 
-        //Register EventBus
+        reportManager = new ReportManager(this);
 
         // Application's observer
 
         // Call Imp
         try {
-            Class clazz = Class.forName(this.getClass().getPackage().getName() + ".wrapper.imp." + StringUtils.capitalize(getSetting().getChannel()) + "Imp");
+            Class clazz = Class.forName(getClass().getPackage().getName() + ".wrapper.imp." + StringUtils.capitalize(getSetting().getChannel()) + "Imp");
             sdkImp = (SdkImp) FunctionUtils.newInstance(clazz, this);
         } catch (ClassNotFoundException e) {
             //Imp 不存在
@@ -102,36 +95,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         Logger.d(TAG, "Tsdk init success.");
 
         // report app
-        reportLaunch();
-    }
-
-    private void reportLaunch(){
-
-        EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT, ResourceHelper.getString(getContext(), "tsdk_init")));
-
-        AppReport.launch(new ReportListener<App.LaunchResult>() {
-            @Override
-            public void callback(App.LaunchResult launchResult, ResponseException e) {
-
-                if (e != null) // 上报字段有误
-                {
-                    Logger.e(TAG, "App.Launch failed: " + e.getMessage() + ", Code:" + e.getCode(), e);
-
-                    EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT_FAIL, ResourceHelper.getString(getContext(), "tsdk_init_success")));
-
-                } else {
-                    //重置为线上的public key
-                    Query.setPublicKey(launchResult.getPublicKey());
-                    //设置alid
-                    setAlid(launchResult.getAlid());
-
-                    Logger.e(TAG, "App.Launch success: " + getAlid());
-
-                    EventBus.getDefault().postSticky(Eventer.create(Eventer.TYPE.INIT_SUCCESS, ResourceHelper.getString(getContext(), "tsdk_init_fail")));
-
-                }
-            }
-        });
+        reportManager.launch();
     }
 
     public Context getContext() {
@@ -146,6 +110,10 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         return alid;
     }
 
+    public ReportManager getReportManager() {
+        return reportManager;
+    }
+
     private void setContext(Context context) {
         this.context = context;
     }
@@ -154,7 +122,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         this.setting = setting;
     }
 
-    private synchronized void setAlid(String alid) {
+    public synchronized void setAlid(String alid) {
         this.alid = alid;
     }
 
@@ -208,37 +176,37 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
 
         EventBus.getDefault().register(this);
 
-        sdkImp.onCreate();
+        sdkImp.onActivityCreate(getMainActivity());
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_START)
     public void onActivityStart() {
         Logger.d(TAG, getMainActivity().getLocalClassName() + ".onStart");
 
-        sdkImp.onStart();
+        sdkImp.onActivityStart(getMainActivity());
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
     public void onActivityResume() {
         Logger.d(TAG, getMainActivity().getLocalClassName() + ".onResume");
 
-        AppReport.start(null);
+        reportManager.start();
 
-        sdkImp.onResume();
+        sdkImp.onActivityResume(getMainActivity());
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
     public void onActivityPause() {
         Logger.d(TAG, getMainActivity().getLocalClassName() + ".onPause");
 
-        sdkImp.onPause();
+        sdkImp.onActivityPause(getMainActivity());
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
     public void onActivityStop() {
         Logger.d(TAG, getMainActivity().getLocalClassName() + ".onStop");
 
-        sdkImp.onStop();
+        sdkImp.onActivityStop(getMainActivity());
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
@@ -250,7 +218,7 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
 
         EventBus.getDefault().unregister(this);
 
-        sdkImp.onDestroy();
+        sdkImp.onActivityDestroy(getMainActivity());
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN, sticky = true)
@@ -287,18 +255,18 @@ final public class TsdkApi implements LifecycleObserver, LifecycleOwner {
         sdkImp.pay();
     }
 
-    private Setting readSetting() {
+    private void readSetting(Context context) {
 
         try  {
-            Source source = ResourceHelper.readAsset(getContext(), "tsdk.json");
+            Source source = ResourceHelper.readAsset(context, "tsdk.json");
 
             String json = IoUtils.readJson(source);
 
             Setting setting = Setting.fromJson(Setting.class, json);
 
-            setting.readSubChannel(getContext());
+            setting.readSubChannel(context);
 
-            return setting;
+            setSetting(setting);
 
         } catch (IOException e) {
             //Crash

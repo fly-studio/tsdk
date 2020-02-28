@@ -1,8 +1,16 @@
 package org.fly.tsdk.query;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.fly.tsdk.io.Logger;
 import org.fly.tsdk.query.cookie.CookieJarImpl;
 import org.fly.tsdk.query.cookie.MemoryCookieStore;
+import org.fly.tsdk.text.Validator;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +46,9 @@ public class Request {
     }
 
     public Request setUrl(HttpUrl url) {
+
+        validateUrl(url.toString());
+
         this.url = url;
         return this;
     }
@@ -120,16 +131,57 @@ public class Request {
         return getBody() != null ? getBody().contentType() : MediaType.get(getHeader("content-type"));
     }
 
+    private void validateUrl(String url)
+    {
+        if (!Validator.equalsUrl(url))
+            throw new IllegalArgumentException("Invalid URL: " + url);
+    }
+
     public static class Builder {
         protected Request request = new Request();
+        private String url;
+        private Map<String, String> urlParameters = new HashMap<>();
+        private List<Pair<String, String>> queryParameters = new ArrayList<>();
+
+        public Builder(String url) {
+            this.url = url;
+        }
+
+        public Builder()
+        {
+
+        }
 
         public Builder method(String method) {
             request.setMethod(method);
             return this;
         }
 
-        public Builder url(HttpUrl url) {
-            request.setUrl(url);
+        public Builder url(String url) {
+            this.url = url;
+            return this;
+        }
+
+        public Builder urlParameter(final String name, String value)
+        {
+            urlParameters.put(name, value);
+            return this;
+        }
+
+        public Builder urlParameters(final Map<String, String> urlParameters) {
+            this.urlParameters = urlParameters;
+            return this;
+        }
+
+        public Builder queryParameter(final String name, String value)
+        {
+            queryParameters.add(Pair.of(name, value));
+            return this;
+        }
+
+        public Builder queryParameters(final List<Pair<String, String>> queryParameters)
+        {
+            this.queryParameters = queryParameters;
             return this;
         }
 
@@ -138,8 +190,24 @@ public class Request {
             return this;
         }
 
+        public Builder headers(Map<String, String> headers) {
+            for (Map.Entry<String, String> entry : headers.entrySet()
+                    ) {
+                header(entry.getKey(), entry.getValue());
+            }
+            return this;
+        }
+
         public Builder cookie(String name, String value) {
             request.setCookie(name, value);
+            return this;
+        }
+
+        public Builder cookies(Map<String, String> cookies) {
+            for (Map.Entry<String, String> entry : cookies.entrySet()
+                    ) {
+                cookie(entry.getKey(), entry.getValue());
+            }
             return this;
         }
 
@@ -159,7 +227,28 @@ public class Request {
         }
 
         public Request build() {
+
+            for (Map.Entry<String, String> entry: urlParameters.entrySet()) {
+                try {
+                    String value = StringUtils.isEmpty(entry.getValue()) ? "" : URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8.toString());
+                    url = url.replace("{" + entry.getKey() + "}",  value);
+                } catch (UnsupportedEncodingException e) {
+                    Logger.e(TAG, e.getMessage(), e);
+                }
+            }
+
+            HttpUrl.Builder httpUrlBuilder = HttpUrl.get(url).newBuilder();
+
+            for (Pair<String, String> param: queryParameters
+                 ) {
+                httpUrlBuilder.addQueryParameter(param.getKey(), param.getValue());
+            }
+
+            request.setUrl(httpUrlBuilder.build());
+
             return request;
         }
+
+
     }
 }

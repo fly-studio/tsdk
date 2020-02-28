@@ -1,7 +1,8 @@
 package org.fly.tsdk.query;
 
 import android.os.AsyncTask;
-import android.os.Build;
+
+import androidx.annotation.Nullable;
 
 import org.apache.commons.lang3.StringUtils;
 import org.fly.tsdk.io.Logger;
@@ -26,7 +27,7 @@ import okio.BufferedSource;
 import okio.Okio;
 import okio.Sink;
 
-public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> {
+public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response, ResponseException>> {
     private static final String TAG = "HTTP_Task";
     public static final int DOWNLOAD_CHUNK_SIZE = 2048; //Same as Okio Segment.SIZE
 
@@ -35,8 +36,6 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
     private QueryListener queryListener;
     private File file;
     private int retries = 0;
-    final private LinkedList<Object> middlewareObjects  = new LinkedList<>();
-
 
     private QueryTask() {
 
@@ -64,6 +63,12 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
     public void addMiddleware(Middleware middleware)
     {
+        for (Middleware middleware1: middlewareList)
+        {
+            if (middleware.getClass().getName().equals(middleware1.getClass().getName()))
+                return;
+        }
+
         middlewareList.add(middleware);
     }
 
@@ -74,7 +79,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
     }
 
     @Override
-    protected void onPostExecute(AsyncTaskResult<Response> asyncTaskResult) {
+    protected void onPostExecute(AsyncTaskResult<Response, ResponseException> asyncTaskResult) {
         super.onPostExecute(asyncTaskResult);
 
         if (queryListener == null)
@@ -82,18 +87,18 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
         if (isCancelled())
         {
-            queryListener.onError(new ResponseException("Request be cancelled", 400), middlewareObjects);
+            queryListener.onError(new ResponseException("Request be cancelled", 400, null));
 
         } else if (asyncTaskResult.getError() != null)
         {
-            Throwable e = asyncTaskResult.getError();
-            queryListener.onError(e instanceof ResponseException ? (ResponseException) e : new ResponseException(e.getMessage(), 500, e) , middlewareObjects);
+            ResponseException e = asyncTaskResult.getError();
+            queryListener.onError(e);
 
         } else {
-            queryListener.onDone(asyncTaskResult.getResult(), middlewareObjects);
+            queryListener.onDone(asyncTaskResult.getResult());
 
             if (file != null)
-                queryListener.onDownloaded(file, middlewareObjects);
+                queryListener.onDownloaded(file);
         }
     }
 
@@ -108,27 +113,34 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
 
 
     @Override
-    protected AsyncTaskResult<Response> doInBackground(Void... calls) {
+    protected AsyncTaskResult<Response, ResponseException> doInBackground(Void... calls) {
+
         try {
-            middlewareObjects.clear();
+            final LinkedList<Object> middlewareObjects  = new LinkedList<>();
 
             for (Middleware middleware : middlewareList) {
                 middleware.before(request, middlewareObjects);
             }
 
-            Response response = callWithRetry(request);
+            Response response = callWithRetry(request, middlewareObjects);
 
             return new AsyncTaskResult<>(response);
 
         } catch (Throwable e) {
-            return returnException(e);
+            publishProgress(0L, 0L);
+
+            return new AsyncTaskResult<>(makeException(e, null));
         }
     }
 
-    private AsyncTaskResult<Response> returnException(Throwable e)
+    private ResponseException makeException(Throwable e, @Nullable Response response)
     {
-        publishProgress(0L, 0L);
-        return new AsyncTaskResult<>(e);
+        return e instanceof ResponseException ? (ResponseException) e : new ResponseException(e.getMessage(), 500, null, e);
+    }
+
+    private ResponseException makeException(Response response)
+    {
+        return new ResponseException(response.getStatus() + ": " + response.getContent(), response.getCode(), response);
     }
 
     /**
@@ -137,13 +149,16 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
      * @return
      * @throws Throwable
      */
-    protected Response callWithRetry(Request request) throws Throwable {
+    protected Response callWithRetry(final Request request, final LinkedList<Object> middlewareObjects) throws Throwable {
         int fails = 0;
         Throwable lastError = null;
+
         while (true)
         {
+            Response response = null;
+
             try {
-                Response response = httpCall(request);
+                response = httpCall(request, middlewareObjects);
 
                 for (Middleware middleware : middlewareList) {
                     middleware.after(response, middlewareObjects);
@@ -152,7 +167,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
                 if (response.getCode() == 500) // 服务器错误, 也可重试
                 {
                     fails++;
-                    lastError = new ResponseException(response.getStatus() + ": " + response.getContent(), response.getCode());
+                    lastError = makeException(response);
                 } else {
                     return response;
                 }
@@ -160,7 +175,7 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
             } catch (SocketTimeoutException e)
             {
                 fails++;
-                lastError = e;
+                lastError = makeException(e, response);
             }
 
             if (retries >= 0 && fails > retries) {
@@ -172,8 +187,8 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
     }
 
 
-    protected Response httpCall(Request request) throws Throwable {
-
+    protected Response httpCall(final Request request, final LinkedList<Object> middlewareObjects) throws Throwable
+    {
         OkHttpClient okHttpClient = getHttpClient(request);
 
         final okhttp3.Request httpRequest = getHttpRequest(request);
@@ -186,7 +201,9 @@ public class QueryTask extends AsyncTask<Void, Long, AsyncTaskResult<Response>> 
         Response.Builder builder = new Response.Builder()
                 .url(request.getUrl())
                 .cookieJar(request.getCookieJar())
-                .status(httpResponse.code(), httpResponse.message());
+                .status(httpResponse.code(), httpResponse.message())
+                .attach(middlewareObjects)
+                ;
 
         if (body != null)
         {
